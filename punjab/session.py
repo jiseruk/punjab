@@ -192,19 +192,8 @@ class Session(jabber.JabberClientFactory, server.Session):
         self.authenticator.useTls = self.secure
 
         if attrs.has_key('route'):
-            if attrs['route'].startswith("xmpp:"):
-                self.route = attrs['route'][5:]
-                if self.route.startswith("//"):
-                    self.route = self.route[2:]
-
-                # route format change, see http://www.xmpp.org/extensions/xep-0124.html#session-request
-                rhostname, rport = self.route.split(":")
-                self.port = int(rport)
-                self.hostname = rhostname
-                self.resource = ''
-            else:
-                raise error.Error('internal-server-error')
-
+            self.route = attrs['route']
+            self.resource = ''
 
         self.authid      = 0
         self.rid         = rid + 1

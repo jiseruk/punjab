@@ -665,8 +665,26 @@ class HttpbService(punjab.Service):
                         lang = body.getAttribute(k)
         if lang:
             body['lang'] = lang
+
         if not body.hasAttribute('inactivity'):
             body['inactivity'] = 60
+
+        if body.hasAttribute('route'):
+            route = body.getAttribute('route')
+            if route.startswith("xmpp:"):
+                self.route = body['route'] = route[5:]
+                if self.route.startswith("//"):
+                    self.route = self.route[2:]
+                # route format change, see http://www.xmpp.org/extensions/xep-0124.html#session-request
+                try:
+                    rhostname, rport = self.route.split(":")
+                except ValueError:
+                    return None, defer.fail(error.BadRequest)
+                body['port'] = int(rport)
+                body['hostname'] = rhostname
+            else:
+                return None, defer.fail(error.BadRequest)
+
         return self.make_session(self, body.attributes)
 
     def stopService(self):

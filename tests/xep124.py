@@ -438,3 +438,31 @@ class XEP0124TestCase(test_basic.TestCase):
         return d
 
 
+
+    def testInvalidRouteAttribute(self):
+        """
+        Make sure invalid route attributes return the correct terminal binding error.
+        """
+        def _testError(err):
+            self.assertEqual('400', err.value[0])
+            self.assertEqual('Bad Request', err.value[1])
+
+        BOSH_XML = """<body content='text/xml; charset=utf-8'
+      hold='1'
+      rid='%(rid)i'
+      to='localhost'
+      route='invalid'
+      ver='1.6'
+      wait='3'
+      ack='1'
+      xml:lang='en'
+      xmlns='http://jabber.org/protocol/httpbind'/>
+ """% { "rid": self.rid, "server_port": self.server_port }
+
+        self.server_factory.protocol.delay_features = 10
+        d = self.proxy.connect(BOSH_XML)
+        d.addCallback(lambda x: self.fail())
+        d.addErrback(_testError)
+        return d
+
+
