@@ -9,6 +9,7 @@ from twisted.names.srvconnect import SRVConnector
 
 try:
     from twisted.words.xish import domish, xmlstream
+    from twisted.words.xish import domish, xmlstream
     from twisted.words.protocols import jabber as jabber_protocol
 except ImportError:
     from twisted.xish import domish, xmlstream
@@ -22,6 +23,7 @@ from punjab.xmpp import ns
 
 import time
 import error
+import pickle
 
 try:
     from twisted.internet import ssl
@@ -87,7 +89,8 @@ def make_session(pint, attrs, session_type='BOSH'):
     # timeout
     reactor.callLater(s.inactivity, s.checkExpired)
 
-    pint.sessions[s.sid] = s
+    #pint.sessions[s.sid] = s
+    pint.redis.set(s.sid, pickle.dumps(s))
 
     return s, s.waiting_requests[0].deferred
 
@@ -534,15 +537,17 @@ class Session(jabber.JabberClientFactory, server.Session):
         else: # need to wait for a new request and then expire
             do_expire = False
 
-        if self.pint and self.pint.sessions.has_key(self.sid):
+        if self.pint and self.pint.redis.exists(self.sid):
             if do_expire:
                 try:
                     self.expire()
                 except:
                     self.onExpire()
             else:
-                s = self.pint.sessions.get(self.sid)
+                #s = self.pint.sessions.get(self.sid)
+                s = pickle.loads(self.pint.redis.get(self.sid))
                 s.stream_error = e
+                self.pint.redis.set(self.sid, pickle.dumps(s))
 
     def connectError(self, reason):
         """called when we get disconnected"""
@@ -573,15 +578,17 @@ class Session(jabber.JabberClientFactory, server.Session):
         else: # need to wait for a new request and then expire
             do_expire = False
 
-        if self.pint and self.pint.sessions.has_key(self.sid):
+        #if self.pint and self.pint.sessions.has_key(self.sid):
+        if self.pint and self.pint.redis.get(self.sid):
             if do_expire:
                 try:
                     self.expire()
                 except:
                     self.onExpire()
             else:
-                s = self.pint.sessions.get(self.sid)
+                s = pickle.loads(self.pint.redis.get(self.sid))
                 s.stream_error = e
+                self.pint.redis.set(self.sid, pickle.dumps(s))
 
 
     def sendRawXml(self, obj):

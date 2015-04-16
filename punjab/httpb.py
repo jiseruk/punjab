@@ -18,7 +18,8 @@ import error
 from session import make_session
 import punjab
 from punjab.xmpp import ns
-
+import pickle
+import redis
 
 NS_BIND = 'http://jabber.org/protocol/httpbind'
 NS_FEATURES = 'http://etherx.jabber.org/streams'
@@ -572,13 +573,14 @@ class HttpbService(punjab.Service):
     def __init__(self,
                  verbose = 0, polling = 15,
                  use_raw = False, bindAddress=None,
-                 session_creator = None):
+                 session_creator = None, redis='localhost:6379'):
         if session_creator is not None:
             self.make_session = session_creator
         else:
             self.make_session = make_session
         self.v  = verbose
         self.sessions = {}
+        self.redis = redis.StrictRedis(host=redis.split(":")[0], port=redis.split(":")[1], db=0)
         self.polling = polling
         # self.expired  = {}
         self.use_raw  = use_raw
@@ -595,7 +597,8 @@ class HttpbService(punjab.Service):
         Call poll time outs on sessions that have waited too long.
         """
         time_now = time.time() + 2.9 # need a number to offset the poll timeouts
-        for session in self.sessions.itervalues():
+        for session_id in self.redis.keys():
+            session = pickle.loads(self.redis.get(session_id))
             if len(session.waiting_requests)>0:
                 for wr in session.waiting_requests:
                     if time_now - wr.wait_start >= wr.timeout:
@@ -680,9 +683,11 @@ class HttpbService(punjab.Service):
     def terminateSessions(self):
         """Terminate all active sessions."""
         if self.v:
-            log.msg('Terminating %d BOSH sessions.' % len(self.sessions))
-        for s in self.sessions.values():
+            log.msg('Terminating %d BOSH sessions.' % len(self.redis.keys()))
+        for sid in self.redis.keys():
+            s = pickle.loads(self.redis.get(sid))
             s.terminate()
+            #self.redis.delete(sid)
 
     def parseBody(self, body, xmpp_elements):
         try:
@@ -694,7 +699,7 @@ class HttpbService(punjab.Service):
                     log.msg('Session ID not found')
                 return None, defer.fail(error.NotFound)
             if self.inSession(body):
-                s = self.sessions[sid]
+                s = pickle.loads(self.redis.get(sid))
                 s.touch() # any connection should be a renew on wait
             else:
                 if self.v:
@@ -742,13 +747,15 @@ class HttpbService(punjab.Service):
         except:
             log.err()
             return  s, defer.fail(error.InternalServerError)
+        finally:
+            self.redis.set(sid, pickle.dumps(s))
 
 
     def onExpire(self, session_id):
         """ preform actions based on when the jabber connection expires """
         if self.v:
             log.msg('expire (%s)' % (str(session_id),))
-            log.msg(len(self.sessions.keys()))
+            log.msg(len(self.redis.keys()))
 
     def _parse(self, session, body_tag, xmpp_elements):
         # increment the request counter
@@ -806,7 +813,8 @@ class HttpbService(punjab.Service):
     def inSession(self, body):
         """ """
         if body.hasAttribute('sid'):
-            if self.sessions.has_key(body['sid']):
+            #if self.sessions.has_key(body['sid']):
+            if self.redis.exists(body['sid']):
                 return True
         return False
 

@@ -36,5 +36,8 @@ setup(name='punjab',
       zip_safe=False,
       url='https://github.com/twonds/punjab',
       packages=['punjab','punjab.xmpp', 'twisted.plugins'],
-      package_data={'twisted.plugins': ['twisted/plugins/punjab.py']}
+      package_data={'twisted.plugins': ['twisted/plugins/punjab.py']},
+      install_requires=[
+          'redis'
+      ]
       )
